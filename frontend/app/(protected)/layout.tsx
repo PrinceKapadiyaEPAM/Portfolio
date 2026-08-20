@@ -33,13 +33,17 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     router.replace('/login');
   }
 
+  const nav = user?.role === 'superadmin'
+    ? [...NAV, { href: '/admin/organizations', label: 'Admin' }]
+    : NAV;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-200 px-6 py-0 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <span className="font-semibold text-gray-900 py-3"><span className="text-blue-600 mr-1">◆</span>FinTech Platform</span>
           <div className="flex">
-            {NAV.map(({ href, label }) => {
+            {nav.map(({ href, label }) => {
               const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
               return (
                 <Link

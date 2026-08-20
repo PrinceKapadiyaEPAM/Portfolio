@@ -28,3 +28,17 @@ export async function updateOrganization(id: string, payload: Partial<Organizati
 export async function deleteOrganization(id: string): Promise<void> {
   await api.delete(`/organize/${id}`);
 }
+
+export interface OrgMember {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function fetchOrgMembers(orgId: string): Promise<OrgMember[]> {
+  const { data } = await api.get<OrgMember[]>(`/organize/${orgId}/users`);
+  return data;
+}

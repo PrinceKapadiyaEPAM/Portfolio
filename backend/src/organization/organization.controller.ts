@@ -17,6 +17,12 @@ export class OrganizationController {
     return this.org.findAll();
   }
 
+  @Get(':id/users')
+  @Roles('superadmin')
+  getUsers(@Param('id') id: string) {
+    return this.org.findUsers(id);
+  }
+
   @Get(':id')
   @Roles('superadmin')
   getOne(@Param('id') id: string) {

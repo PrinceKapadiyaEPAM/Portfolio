@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
 import { updateMe, fetchOrgUsers, inviteUser } from '@/lib/users-api';
 import type { OrgUser } from '@/lib/users-api';
+import { fetchOrganizations, fetchOrgMembers } from '@/lib/organization-api';
+import type { Organization } from '@/lib/organization-api';
 import Modal from '@/components/ui/Modal';
 
 const ROLE_BADGE: Record<string, string> = {
@@ -138,8 +140,15 @@ function ProfileTab() {
 
 function TeamTab() {
   const { user } = useAuthStore();
+  const isSuperadmin = user?.role === 'superadmin';
+
+  // Org selector (superadmin only)
+  const [orgs, setOrgs]               = useState<Organization[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [selectedOrgId, setSelectedOrgId] = useState('');
+
   const [members, setMembers]     = useState<OrgUser[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]     = useState(!isSuperadmin);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   // Invite form state
@@ -149,17 +158,31 @@ function TeamTab() {
   const [iSaving, setISaving] = useState(false);
   const [iError, setIError]   = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const data = await fetchOrgUsers();
-      setMembers(data);
-    } finally {
-      setLoading(false);
+  // Load own org users (admin) or org list (superadmin) on mount
+  useEffect(() => {
+    if (isSuperadmin) {
+      setOrgsLoading(true);
+      fetchOrganizations()
+        .then((data) => setOrgs(data.filter((o) => o.slug !== 'system')))
+        .finally(() => setOrgsLoading(false));
+    } else {
+      setLoading(true);
+      fetchOrgUsers()
+        .then(setMembers)
+        .finally(() => setLoading(false));
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // Load members for selected org (superadmin)
+  useEffect(() => {
+    if (!isSuperadmin || !selectedOrgId) return;
+    setLoading(true);
+    setMembers([]);
+    fetchOrgMembers(selectedOrgId)
+      .then((data) => setMembers(data as OrgUser[]))
+      .finally(() => setLoading(false));
+  }, [selectedOrgId, isSuperadmin]);
 
   function openInvite() {
     setIEmail(''); setIName(''); setIRole('viewer'); setIError(null);
@@ -176,11 +199,12 @@ function TeamTab() {
         email: iEmail.trim(),
         name:  iName.trim() || undefined,
         role:  iRole,
+        orgId: isSuperadmin ? selectedOrgId : undefined,
       });
       setMembers((prev) => [...prev, created]);
       setInviteOpen(false);
     } catch (err: any) {
-      setIError(err?.response?.data?.message ?? err?.message ?? 'Failed to invite');
+      setIError(err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message ?? 'Failed to invite');
     } finally {
       setISaving(false);
     }
@@ -203,22 +227,51 @@ function TeamTab() {
     );
   }
 
+  const selectedOrg = orgs.find((o) => o.id === selectedOrgId);
+  const inviteTitle = isSuperadmin
+    ? `Invite to ${selectedOrg?.name ?? 'Organization'}`
+    : 'Invite User';
+
   return (
     <div className="space-y-4">
+      {/* Superadmin: org selector */}
+      {isSuperadmin && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Organization</label>
+          {orgsLoading ? (
+            <div className="h-9 bg-gray-200 animate-pulse rounded-lg" />
+          ) : (
+            <select
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— Choose an organization —</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          {!loading && `${members.length} member${members.length !== 1 ? 's' : ''} in your organisation`}
+          {!loading && members.length > 0
+            ? `${members.length} member${members.length !== 1 ? 's' : ''}${isSuperadmin && selectedOrg ? ` in ${selectedOrg.name}` : ' in your organisation'}`
+            : null}
         </p>
         <button
           onClick={openInvite}
-          className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={isSuperadmin && !selectedOrgId}
+          className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + Invite User
         </button>
       </div>
 
       {/* Invite modal */}
-      <Modal title="Invite User" open={inviteOpen} onClose={() => setInviteOpen(false)}>
+      <Modal title={inviteTitle} open={inviteOpen} onClose={() => setInviteOpen(false)}>
         <form onSubmit={handleInvite} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
@@ -267,7 +320,11 @@ function TeamTab() {
       </Modal>
 
       {/* Members table */}
-      {loading ? (
+      {isSuperadmin && !selectedOrgId ? (
+        <div className="bg-white border border-gray-200 rounded-xl py-12 text-center text-sm text-gray-400">
+          Select an organization above to view its members.
+        </div>
+      ) : loading ? (
         <div className="animate-pulse space-y-2">
           {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-gray-200 rounded-lg" />)}
         </div>

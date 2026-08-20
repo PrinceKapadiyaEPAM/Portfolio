@@ -43,4 +43,21 @@ export class OrganizationService {
     if (!org) throw new NotFoundException('organization not found');
     await this.prisma.organization.delete({ where: { id } });
   }
+
+  async findUsers(orgId: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('organization not found');
+    const users = await this.prisma.user.findMany({
+      where: { orgId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+    }));
+  }
 }
