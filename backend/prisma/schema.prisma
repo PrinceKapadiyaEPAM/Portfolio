@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(100)
+  slug      String   @unique @db.VarChar(50)
+  plan      String   @default("free") @db.VarChar(20)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  orgId                 String
+  email                 String    @db.VarChar(255)
+  passwordHash          String    @db.VarChar(255)
+  name                  String?   @db.VarChar(100)
+  role                  String    @default("viewer") @db.VarChar(20)
+  isActive              Boolean   @default(true)
+  refreshTokenHash      String?   @db.VarChar(255)
+  refreshTokenExpiresAt DateTime?
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  org               Organization       @relation(fields: [orgId], references: [id])
+  watchlists        Watchlist[]
+  portfolio         Portfolio?
+  trades            TradeSetup[]
+  tradeTransactions TradeTransaction[]
+
+  @@unique([orgId, email])
+  @@index([orgId])
+  @@map("users")
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  name      String   @db.VarChar(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User            @relation(fields: [userId], references: [id])
+  items WatchlistItem[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([orgId])
+  @@map("watchlists")
+}
+
+model WatchlistItem {
+  id          String   @id @default(cuid())
+  watchlistId String
+  symbol      String   @db.VarChar(20)
+  notes       String?  @db.VarChar(255)
+  addedAt     DateTime @default(now())
+
+  watchlist Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, symbol])
+  @@map("watchlist_items")
+}
+
+model Portfolio {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  orgId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  holdings Holding[]
+
+  @@index([orgId])
+  @@map("portfolios")
+}
+
+model Holding {
+  id          String   @id @default(cuid())
+  portfolioId String
+  symbol      String   @db.VarChar(20)
+  qty         Decimal  @db.Decimal(18, 4)
+  avgBuyPrice Decimal  @db.Decimal(18, 4)
+  tags        String[] @default([])
+  buyDate     DateTime @db.Date
+  notes       String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  portfolio Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  sales     HoldingSale[]
+
+  @@index([portfolioId])
+  @@map("holdings")
+}
+
+model HoldingSale {
+  id         String   @id @default(cuid())
+  holdingId  String
+  qty        Decimal  @db.Decimal(18, 4)
+  price      Decimal  @db.Decimal(18, 4)
+  charges    Decimal  @default(0) @db.Decimal(18, 4)
+  pnl        Decimal? @db.Decimal(18, 4)
+  notes      String?  @db.VarChar(255)
+  executedAt DateTime
+  createdAt  DateTime @default(now())
+
+  holding Holding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@index([holdingId])
+  @@map("holding_sales")
+}
+
+model MarketSnapshot {
+  id            String   @id @default(cuid())
+  symbol        String   @unique @db.VarChar(20)
+  ltp           Decimal  @db.Decimal(18, 4)
+  changePct     Decimal  @db.Decimal(10, 4)
+  volume        BigInt
+  week52High    Decimal? @db.Decimal(18, 4)
+  week52Low     Decimal? @db.Decimal(18, 4)
+  perChange365d Decimal? @db.Decimal(10, 4)
+  snappedAt     DateTime
+
+  @@index([changePct])
+  @@index([volume])
+  @@map("market_snapshots")
+}
+
+model ScreenerPreset {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  name      String   @db.VarChar(100)
+  filters   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([orgId])
+  @@map("screener_presets")
+}
+
+model DailyPrice {
+  id         String   @id @default(cuid())
+  symbol     String   @db.VarChar(20)
+  date       DateTime @db.Date
+  closePrice Decimal  @db.Decimal(18, 4)
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+  @@map("daily_prices")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  action    String   @db.VarChar(20)
+  entity    String   @db.VarChar(50)
+  entityId  String?  @db.VarChar(50)
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model TradeSetup {
+  id           String   @id @default(cuid())
+  userId       String
+  orgId        String
+  tradeId      String   @unique @db.VarChar(30)
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  symbol       String   @db.VarChar(20)
+  buyRangeHigh Decimal  @db.Decimal(18, 4)
+  buyRangeLow  Decimal  @db.Decimal(18, 4)
+  status       String   @default("draft") @db.VarChar(30)
+  tags         String[]
+  slType       String?  @db.VarChar(10)
+  slReference  String?  @db.VarChar(50)
+  slValue      Decimal? @db.Decimal(18, 4)
+  slStatus     String?  @db.VarChar(20)
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id])
+  accLevels    AccumulationLevel[]
+  targets      TradeTarget[]
+  transactions TradeTransaction[]
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([symbol])
+  @@map("trade_setups")
+}
+
+model AccumulationLevel {
+  id            String    @id @default(cuid())
+  tradeSetupId  String
+  levelNum      Int
+  triggerPrice  Decimal   @db.Decimal(18, 4)
+  plannedQty    Decimal   @db.Decimal(18, 4)
+  executedQty   Decimal   @default(0) @db.Decimal(18, 4)
+  executedPrice Decimal?  @db.Decimal(18, 4)
+  status        String    @default("pending") @db.VarChar(20)
+  executedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tradeSetup   TradeSetup         @relation(fields: [tradeSetupId], references: [id], onDelete: Cascade)
+  transactions TradeTransaction[]
+
+  @@unique([tradeSetupId, levelNum])
+  @@index([tradeSetupId])
+  @@map("accumulation_levels")
+}
+
+model TradeTarget {
+  id            String    @id @default(cuid())
+  tradeSetupId  String
+  levelNum      Int
+  targetPrice   Decimal   @db.Decimal(18, 4)
+  plannedQty    Decimal?  @db.Decimal(18, 4)
+  plannedPct    Decimal?  @db.Decimal(8, 4)
+  executedQty   Decimal   @default(0) @db.Decimal(18, 4)
+  executedPrice Decimal?  @db.Decimal(18, 4)
+  status        String    @default("pending") @db.VarChar(20)
+  executedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tradeSetup   TradeSetup         @relation(fields: [tradeSetupId], references: [id], onDelete: Cascade)
+  transactions TradeTransaction[]
+
+  @@unique([tradeSetupId, levelNum])
+  @@index([tradeSetupId])
+  @@map("trade_targets")
+}
+
+model TradeTransaction {
+  id                  String   @id @default(cuid())
+  tradeSetupId        String?
+  accumulationLevelId String?
+  targetId            String?
+  userId              String
+  orgId               String
+  txnRef              String   @unique @db.VarChar(30)
+  symbol              String   @db.VarChar(20)
+  side                String   @db.VarChar(4)
+  qty                 Decimal  @db.Decimal(18, 4)
+  price               Decimal  @db.Decimal(18, 4)
+  executedAt          DateTime
+  txnType             String   @db.VarChar(20)
+  charges             Decimal  @default(0) @db.Decimal(18, 4)
+  pnl                 Decimal? @db.Decimal(18, 4)
+  notes               String?  @db.VarChar(255)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tradeSetup        TradeSetup?        @relation(fields: [tradeSetupId], references: [id])
+  accumulationLevel AccumulationLevel? @relation(fields: [accumulationLevelId], references: [id])
+  target            TradeTarget?       @relation(fields: [targetId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+
+  @@index([tradeSetupId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([symbol])
+  @@index([executedAt])
+  @@map("trade_transactions")
+}
