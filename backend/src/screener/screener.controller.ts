@@ -11,6 +11,12 @@ import { CreatePresetDto } from './dto/create-preset.dto';
 export class ScreenerController {
   constructor(private readonly screener: ScreenerService) {}
 
+  @Get('symbols')
+  searchSymbols(@Query('q') q: string) {
+    if (!q || q.length < 3) return [];
+    return this.screener.searchSymbols(q);
+  }
+
   @Get('results')
   async getResults(@Query() filters: ScreenerFiltersDto) {
     const [results, meta] = await Promise.all([

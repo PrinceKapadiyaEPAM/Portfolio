@@ -61,3 +61,13 @@ export async function savePreset(name: string, filters: ScreenerFilters): Promis
 export async function deletePreset(id: string): Promise<void> {
   await api.delete(`/screener/presets/${id}`);
 }
+
+export interface SymbolSuggestion {
+  symbol: string;
+  ltp: number;
+}
+
+export async function searchSymbols(q: string): Promise<SymbolSuggestion[]> {
+  const { data } = await api.get<SymbolSuggestion[]>('/screener/symbols', { params: { q } });
+  return data;
+}

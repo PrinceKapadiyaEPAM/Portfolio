@@ -86,4 +86,14 @@ export class ScreenerService {
     if (!preset || preset.userId !== userId) throw new NotFoundException('Preset not found');
     await this.prisma.screenerPreset.delete({ where: { id } });
   }
+
+  async searchSymbols(q: string): Promise<{ symbol: string; ltp: number }[]> {
+    const rows = await this.prisma.marketSnapshot.findMany({
+      where: { symbol: { startsWith: q.toUpperCase() } },
+      select: { symbol: true, ltp: true },
+      orderBy: { symbol: 'asc' },
+      take: 10,
+    });
+    return rows.map((r) => ({ symbol: r.symbol, ltp: Number(r.ltp) }));
+  }
 }
